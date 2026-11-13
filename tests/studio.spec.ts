@@ -12,7 +12,10 @@ test('solves, replays, generates, and preserves the original givens on reveal', 
   await page.getByRole('button', { name: 'Hide solution' }).click();
   await expect(page.locator('#cells .digit')).toHaveCount(givens);
   await page.getByRole('button', { name: 'Solution walkthrough', exact: true }).click();
-  await page.getByRole('button', { name: 'Next step' }).click();
+  const slider = page.getByRole('slider', { name: 'Solution step' });
+  await expect(slider).toBeVisible();
+  await slider.focus();
+  await slider.press('ArrowRight');
   await expect(page.locator('#slide-count')).toContainText('Step 2');
   await page.getByRole('button', { name: 'Return to puzzle' }).click();
   await page.getByRole('button', { name: 'Generate puzzle', exact: true }).click();
@@ -21,14 +24,13 @@ test('solves, replays, generates, and preserves the original givens on reveal', 
   await page.screenshot({ path: 'test-results/studio-desktop.png', fullPage: true });
   expect(errors).toEqual([]);
 });
-test('supports line editing, undo, import, contradictions, and multiple solutions', async ({ page }) => {
-  await page.goto('/'); await page.getByRole('button', { name: 'Blank grid' }).click();
-  await page.getByRole('button', { name: 'Draw line', exact: true }).click();
-  for (const c of [1,11,21]) await page.locator(`#cells [data-cell="${c}"]`).click();
-  await page.getByRole('button', { name: 'Finish line' }).click();
-  await expect(page.locator('#lines polyline')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(page.locator('#lines polyline')).toHaveCount(0);
+test('keeps the grid read-only and checks imported puzzles', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('CREATE & EDIT')).toHaveCount(0);
+  const board = await page.locator('#cells').textContent();
+  await page.locator('#cells .cell').first().click();
+  await page.keyboard.press('9');
+  await expect(page.locator('#cells')).toHaveText(board);
   await page.locator('#page-menu summary').click(); await page.getByRole('link', { name: 'Import grid', exact: true }).click();
   await page.locator('#import-text').fill('11' + '0'.repeat(79)); await page.locator('#load').click();
   await expect(page.locator('#status-text')).toContainText('No solution');
@@ -47,3 +49,4 @@ test('mobile layout, technique catalogue, and cancellation', async ({ page }) =>
   await expect(page.getByRole('row').filter({ hasText: 'Phistomefel Ring' })).toContainText('+200');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
