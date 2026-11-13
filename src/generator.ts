@@ -2,7 +2,7 @@ import { adjacent, blank, type Puzzle } from './puzzle';
 import { solve } from './solver';
 import { checkLogical } from './logical-runner';
 import { analyze, type Analysis } from './walkthrough';
-export interface GenerationOptions { lengths: number[]; symmetricLines?: boolean; symmetric: boolean; logicalOnly: boolean }
+export interface GenerationOptions { lengths: number[]; emptyLines?: boolean; symmetricLines?: boolean; symmetric: boolean; logicalOnly: boolean }
 export interface Generated { puzzle: Puzzle; solution: number[]; analysis: Analysis; elapsed: number; attempts: number }
 const shuffle = <T>(items: T[], random: () => number): T[] => {
   const result = [...items];
@@ -51,7 +51,7 @@ export function findLines(values: number[], lengths: number[], symmetric: boolea
   return lines;
 }
 /** Construction uses a known valid completion; each removal is independently checked.
- * The logical-only option accepts a removal only if the shared technique loop solves it. */
+ * Logical-only generation retries layouts whose final clue set needs search. */
 export function generate(options: GenerationOptions, progress: (text: string) => void = () => {}, random = Math.random, budgetMs = 60000): Generated {
   const { lengths, symmetricLines = true } = options;
   if (!lengths.length || lengths.length > 12 || lengths.some(n => ![3, 5, 7, 9].includes(n)) ||
@@ -64,26 +64,35 @@ export function generate(options: GenerationOptions, progress: (text: string) =>
   }
   const start = performance.now(), deadline = start + budgetMs;
   let attempts = 0;
-  while (performance.now() < deadline) {
+  layouts: while (performance.now() < deadline) {
     attempts++; progress(`Finding a palindrome layout · attempt ${attempts}`);
     const solution = completedGrid(random), lines = findLines(solution, lengths, symmetricLines, random);
     if (!lines) continue;
     const puzzle: Puzzle = { ...blank(), lines, values: [...solution], givens: [...solution] };
     const orbits = shuffle(Array.from({ length: options.symmetric ? 41 : 81 }, (_, c) => c), random);
+    if (options.emptyLines !== false) {
+      for (const cell of lines.flat()) {
+        puzzle.givens[cell] = puzzle.values[cell] = 0;
+        if (options.symmetric) puzzle.givens[80 - cell] = puzzle.values[80 - cell] = 0;
+      }
+      const initial = solve(puzzle, deadline - performance.now(), false);
+      if (!initial.exhausted || initial.solutions.length !== 1) continue;
+    }
     for (const c of orbits) {
       if (performance.now() >= deadline) throw new Error('Generation time limit reached. Try fewer or shorter lines.');
       const cells = options.symmetric ? [...new Set([c, 80 - c])] : [c];
+      if (!puzzle.givens[c]) continue;
       cells.forEach(i => { puzzle.givens[i] = 0; puzzle.values[i] = 0; });
-      const check = solve(puzzle, Math.min(1000, deadline - performance.now()), false);
-      let accepted = check.exhausted && check.solutions.length === 1;
-      if (accepted && options.logicalOnly) {
-        try { accepted = checkLogical(puzzle, Math.min(deadline, performance.now() + 1000)) !== null; } catch { accepted = false; }
-      }
-      if (!accepted) cells.forEach(i => { puzzle.givens[i] = solution[i]; puzzle.values[i] = solution[i]; });
+      const check = solve(puzzle, deadline - performance.now(), false);
+      if (!check.exhausted) continue layouts;
+      // A second solution survives any subsequent clue removal, so this orbit
+      // never needs to be checked again after a conclusive rejection.
+      if (check.solutions.length !== 1) cells.forEach(i => { puzzle.givens[i] = solution[i]; puzzle.values[i] = solution[i]; });
       progress(`Removing clues · ${puzzle.givens.filter(Boolean).length} givens remain`);
     }
     const verified = solve(puzzle, Math.max(1, deadline - performance.now()), false);
     if (!verified.exhausted || verified.solutions.length !== 1) continue;
+    if (options.logicalOnly && !checkLogical(puzzle, deadline)) continue;
     const analysis = analyze(puzzle, Math.max(1, deadline - performance.now()), !options.logicalOnly);
     return { puzzle, solution, analysis, elapsed: performance.now() - start, attempts };
   }

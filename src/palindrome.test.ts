@@ -66,5 +66,12 @@ it('generates mixed lengths with two rotated pairs by default', () => {
     const rotated = line.map(cell => 80 - cell).join(',');
     expect(puzzle.lines.some(path => path.join(',') === rotated || path.toReversed().join(',') === rotated)).toBe(true);
   }
+  for (const cell of puzzle.lines.flat()) expect(puzzle.givens[cell]).toBe(0);
+  for (let cell = 0; cell <= 40; cell++) {
+    if (!puzzle.givens[cell]) continue;
+    const givens = [...puzzle.givens];
+    givens[cell] = givens[80 - cell] = 0;
+    expect(solve({ ...puzzle, givens, values: givens }, 5000, false).solutions).toHaveLength(2);
+  }
   audit(solution, puzzle.lines);
 });

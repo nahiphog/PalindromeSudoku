@@ -56,7 +56,7 @@ when checked. Paths may overlap in manually constructed/imported puzzles.
 
 The actual sudokUI modules imported by ThermoSudoku are retained unchanged.
 The logical repertoire includes singles, locked candidates, naked/hidden subsets
-(2–4), basic/finned/sashimi fish (2–4), XY/XYZ/W wings, skyscrapers, two-string
+(2–4), basic fish (2–4), XY/XYZ/W wings, skyscrapers, two-string
 kites, empty rectangles, and **Phistomefel Ring**. See THIRD_PARTY_NOTICES.md.
 
 Phistomefel Ring is registered in `src/solver.ts`'s common `nextLogicalStep`,
@@ -87,11 +87,10 @@ removal preserves proven uniqueness. Logical-only mode additionally requires
 the shared logical solver to complete the puzzle. A final independent search
 verifies uniqueness and records a walkthrough. This construction differs from
 ThermoSudoku's layout-first method because mirrored equality is nondirectional.
-Clues may appear on lines; there is no clue-free generation mode.
+By default all palindrome cells start empty. When clue symmetry is enabled, their rotated counterparts start empty too.
 
 Generation is limited to 60 seconds, 1–12 disjoint lines, and at most 65 occupied
-line cells. Individual removal checks have a bounded budget; inconclusive
-removals retain the clue. This is not a guarantee of globally minimal givens.
+line cells. The generator only returns a puzzle after every remaining clue (or rotational clue group) has been shown necessary for uniqueness. A timeout cannot certify a puzzle.
 Construction starts from shuffled standard-pattern grids rather than sampling
 all Sudoku completions uniformly. Solver checks and walkthroughs each have a
 15-second budget. Workers can be cancelled immediately without changing the
