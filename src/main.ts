@@ -1,6 +1,6 @@
 import './style.css';
 import './studio.css';
-import { adjacent, blank, decodePuzzle, encodePuzzle, example, validatePuzzle, type Puzzle } from './puzzle';
+import { adjacent, blank, linesOverlap, decodePuzzle, encodePuzzle, example, validatePuzzle, type Puzzle } from './puzzle';
 import { candidates, conflicts, type SolveResult } from './solver';
 import { digitsOf } from './vendor/sudokui/board';
 import { repertoire } from './techniques-page';
@@ -44,7 +44,10 @@ function select(c: number) {
   if (!worker && slide === null && !revealed) {
     if (tool === 'line') {
       if (draft.at(-1) === c && draft.length > 1) finishLine();
-      else if (!draft.length || (!draft.includes(c) && adjacent(draft.at(-1)!, c))) draft.push(c);
+      else if (!draft.length || (!draft.includes(c) && adjacent(draft.at(-1)!, c))) {
+        if (linesOverlap([...puzzle.lines, [...draft, c]])) status('Palindrome lines cannot share cells or cross.');
+        else draft.push(c);
+      }
       else status('Choose an adjacent, unused cell. Click Finish line when ready.');
     } else if (tool === 'erase') {
       const index = puzzle.lines.findLastIndex(line => line.includes(c));

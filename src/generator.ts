@@ -1,4 +1,4 @@
-import { adjacent, blank, type Puzzle } from './puzzle';
+import { adjacent, blank, linesOverlap, type Puzzle } from './puzzle';
 import { solve } from './solver';
 import { checkLogical } from './logical-runner';
 import { analyze, type Analysis } from './walkthrough';
@@ -67,7 +67,7 @@ export function generate(options: GenerationOptions, progress: (text: string) =>
   layouts: while (performance.now() < deadline) {
     attempts++; progress(`Finding a palindrome layout · attempt ${attempts}`);
     const solution = completedGrid(random), lines = findLines(solution, lengths, symmetricLines, random);
-    if (!lines) continue;
+    if (!lines || linesOverlap(lines)) continue;
     const puzzle: Puzzle = { ...blank(), lines, values: [...solution], givens: [...solution] };
     const orbits = shuffle(Array.from({ length: options.symmetric ? 41 : 81 }, (_, c) => c), random);
     if (options.emptyLines !== false) {

@@ -48,11 +48,11 @@ for local use.
 ## Constraints and solver
 
 Mirrored positions have equal candidate domains. Equality propagates to a fixed
-point across overlapping lines. The solver enforces normal rows, columns and
+point along palindrome lines. The solver enforces normal rows, columns and
 3×3 boxes at every search node. Even-length continuous paths are impossible:
 their middle two neighboring cells would need equal digits. Generation offers
 odd lengths 3, 5, 7 and 9; import accepts longer paths and reports contradictions
-when checked. Paths may overlap in manually constructed/imported puzzles.
+when checked. Palindrome lines cannot share cells or cross.
 
 The actual sudokUI modules imported by ThermoSudoku are retained unchanged.
 The logical repertoire includes singles, locked candidates, naked/hidden subsets

@@ -1,5 +1,26 @@
 export interface Puzzle { version: 1; values: number[]; givens: number[]; lines: number[][] }
 export const adjacent = (a: number, b: number) => a !== b && Math.abs(Math.floor(a / 9) - Math.floor(b / 9)) <= 1 && Math.abs(a % 9 - b % 9) <= 1;
+/** Distinct adjacent grid segments cross only when they share a midpoint. */
+export function linesOverlap(lines: number[][]): boolean {
+  const occupied = new Set<number>();
+  const midpoints = new Set<number>();
+  for (const line of lines) {
+    const pathMidpoints: number[] = [];
+    for (const [index, cell] of line.entries()) {
+      if (occupied.has(cell)) return true;
+      if (!index) continue;
+      const previous = line[index - 1];
+      const rowSum = Math.floor(cell / 9) + Math.floor(previous / 9);
+      const columnSum = cell % 9 + previous % 9;
+      const midpoint = rowSum * 17 + columnSum;
+      if (midpoints.has(midpoint)) return true;
+      pathMidpoints.push(midpoint);
+    }
+    line.forEach(cell => occupied.add(cell));
+    pathMidpoints.forEach(point => midpoints.add(point));
+  }
+  return false;
+}
 export function blank(): Puzzle { return { version: 1, values: Array(81).fill(0), givens: Array(81).fill(0), lines: [] }; }
 export function validatePuzzle(input: unknown): Puzzle {
   const p = input as Puzzle;
@@ -8,6 +29,7 @@ export function validatePuzzle(input: unknown): Puzzle {
   if (p.givens.some((v, i) => v && v !== p.values[i])) throw new Error('A given must match its cell value.');
   if (!Array.isArray(p.lines) || p.lines.length > 100) throw new Error('Expected at most 100 palindrome lines.');
   for (const line of p.lines) if (!Array.isArray(line) || line.length < 2 || line.length > 81 || new Set(line).size !== line.length || line.some(c => !Number.isInteger(c) || c < 0 || c > 80) || line.some((c, i) => i > 0 && !adjacent(line[i - 1], c))) throw new Error('Lines need 2–81 distinct adjacent cells.');
+  if (linesOverlap(p.lines)) throw new Error("Palindrome lines cannot share cells or cross.");
   return structuredClone({ version: 1, values: p.values, givens: p.givens, lines: p.lines });
 }
 export function example(): Puzzle {
