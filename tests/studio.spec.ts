@@ -1,4 +1,21 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function checkTallyNavigation(page: Page) {
+  const url = page.url();
+  for (const row of await page.locator('.technique-tallies tbody tr').all()) {
+    const technique = await row.locator('th').innerText();
+    const links = row.getByRole('button');
+    await expect(row.locator('td')).toHaveText(/^\d+(, \d+)*$/);
+    for (const link of [links.first(), links.last()]) {
+      const step = Number(await link.innerText());
+      await link.click();
+      await expect(page.locator('#slide-count')).toContainText(`Step ${step} of`);
+      await expect(page.locator('#slide-title')).toHaveText(technique);
+      await expect(page.locator('#slide-range')).toHaveValue(String(step - 1));
+      expect(page.url()).toBe(url);
+    }
+  }
+}
 test('solves, replays, generates, and preserves the original givens on reveal', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -18,6 +35,7 @@ test('solves, replays, generates, and preserves the original givens on reveal', 
   await slider.focus();
   await slider.press('ArrowRight');
   await expect(page.locator('#slide-count')).toContainText('Step 2');
+  await checkTallyNavigation(page);
   await page.getByRole('button', { name: 'Return to puzzle' }).click();
   await page.getByRole('button', { name: 'Generate puzzle', exact: true }).click();
   await expect(page.locator('#status-text')).toContainText('Unique puzzle generated', { timeout: 60000 });
@@ -52,12 +70,73 @@ test('mobile layout, technique catalogue, and cancellation', async ({ page }) =>
 });
 
 
+test('keeps page URLs free of fragments', async ({ page }) => {
+  await page.goto('/?page=simulation#sim-results');
+  await expect(page).toHaveURL(/\?page=simulation$/);
+  await expect(page.locator('#simulation')).toBeVisible();
+  await page.evaluate(() => { location.hash = 'sim-chart'; });
+  await expect(page).toHaveURL(/\?page=simulation$/);
+  await page.locator('#page-menu summary').click();
+  await page.getByRole('link', { name: 'Generate', exact: true }).click();
+  await expect(page).toHaveURL(/\?page=generate$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\?page=simulation$/);
+});
+
+test('remembers independent Generate and Simulation options after refresh', async ({ page }) => {
+  await page.goto('/?page=generate');
+  const generate = page.locator('#generation');
+  await generate.getByLabel('Palindrome line lengths (comma-separated)').fill('7, 7');
+  for (const checkbox of await generate.getByRole('checkbox').all()) await checkbox.uncheck();
+  await page.reload();
+  await expect(generate.getByLabel('Palindrome line lengths (comma-separated)')).toHaveValue('7, 7');
+  for (const checkbox of await generate.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
+
+  await page.goto('/?page=simulation');
+  const simulation = page.locator('#simulation');
+  await expect(simulation.getByLabel('Palindrome line lengths (comma-separated)')).toHaveValue('5, 5, 5, 5');
+  await simulation.getByLabel('Palindrome line lengths (comma-separated)').fill('3, 3');
+  for (const checkbox of await simulation.getByRole('checkbox').all()) await checkbox.uncheck();
+  await simulation.getByLabel('Total trials').selectOption('100');
+  await simulation.getByLabel('Minimum difficulty').selectOption('2000');
+  await page.reload();
+  await expect(simulation.getByLabel('Palindrome line lengths (comma-separated)')).toHaveValue('3, 3');
+  for (const checkbox of await simulation.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
+  await expect(simulation.getByLabel('Total trials')).toHaveValue('100');
+  await expect(simulation.getByLabel('Minimum difficulty')).toHaveValue('2000');
+  await expect(page.locator('#sim-status')).toHaveText('Ready.');
+  await page.goto('/?page=generate');
+  await expect(generate.getByLabel('Palindrome line lengths (comma-separated)')).toHaveValue('7, 7');
+  for (const checkbox of await generate.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
+});
+
 test('runs a simulation trial and opens its walkthrough', async ({ page }) => {
   await page.goto('/?page=simulation');
-  await page.getByLabel('Total trials').selectOption('1');
+  const simulation = page.locator('#simulation');
+  await expect(simulation.getByLabel('Minimum difficulty')).toHaveValue('1000');
+  await simulation.getByLabel('Minimum difficulty').selectOption('0');
+  await simulation.getByLabel('Palindrome line lengths (comma-separated)').fill('3, 3');
+  await expect(simulation.getByLabel('Rotationally symmetric lines')).toBeChecked();
+  await expect(simulation.getByLabel('Rotationally symmetric givens')).toBeChecked();
+  await expect(simulation.getByLabel('Leave palindrome cells empty')).toBeChecked();
+  await expect(simulation.getByLabel('Logical techniques only')).toBeChecked();
+  await page.getByLabel('Total trials').selectOption('10');
   await page.getByRole('button', { name: 'Start simulation' }).click();
+  await expect(simulation.getByLabel('Palindrome line lengths (comma-separated)')).toBeDisabled();
   await expect(page.locator('#sim-status')).toHaveText('Simulation complete.', { timeout: 60000 });
-  await expect(page.locator('#sim-counts')).toContainText('1 completed');
-  await page.getByRole('button', { name: 'View walkthrough' }).click();
+  await expect(page.locator('#sim-counts')).toContainText('10 completed');
+  await expect(page.locator('#sim-results .board')).toHaveCount(10);
+  await expect(page.locator('#sim-results .line-overlay polyline')).toHaveCount(20);
+  const cards = page.locator('#sim-results > article');
+  const first = await cards.nth(0).boundingBox(), second = await cards.nth(1).boundingBox();
+  expect(first!.y).toBe(second!.y);
+  expect(second!.x).toBeGreaterThan(first!.x);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const mobileFirst = await cards.nth(0).boundingBox(), mobileSecond = await cards.nth(1).boundingBox();
+  expect(mobileSecond!.y).toBeGreaterThan(mobileFirst!.y);
+  await page.getByRole('button', { name: 'View walkthrough' }).first().click();
+  await expect(page.locator('#page-menu summary')).toHaveText('Generate');
   await expect(page.getByRole('slider', { name: 'Solution step' })).toBeVisible();
+  await checkTallyNavigation(page);
 });

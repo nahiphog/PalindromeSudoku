@@ -1,14 +1,17 @@
-import type { Generated, GenerationOptions } from './generator';
+import type { Generated } from './generator';
+import { generationOptionsMarkup, readGenerationOptions } from './generation-options';
 import { encodePuzzle } from './puzzle';
+import { rememberOptions } from './saved-options';
 
 const TRIAL_COUNTS = [1, 10, 100, 1000, 10000, 100000, 1000000];
 const DEFAULT_TRIAL_COUNT = 1000000;
 
-export function mountSimulation(root: HTMLElement, options: () => GenerationOptions, open: (result: Generated) => void) {
+export function mountSimulation(root: HTMLElement, open: (result: Generated) => void) {
   root.innerHTML = `<section class="card"><h1>Simulation</h1>
-  <p>Generate and rate multiple puzzles using the current Maker settings.</p>
+  <p>Choose generation settings and rate multiple puzzles.</p>
+  ${generationOptionsMarkup('sim-')}
   <div class="generation-options"><label>Total trials <select id="sim-trials">${TRIAL_COUNTS.map(count => `<option value="${count}"${count === DEFAULT_TRIAL_COUNT ? ' selected' : ''}>${count.toLocaleString()}</option>`).join('')}</select></label>
-  <label>Minimum difficulty <input id="sim-min" type="number" min="0" value="0"></label>
+  <label>Minimum difficulty <select id="sim-min">${[0, 500, 1000, 2000, 10000, 10000000].map(value => `<option value="${value}"${value === 1000 ? ' selected' : ''}>${value.toLocaleString()}</option>`).join('')}</select></label>
   <label><input id="sim-logical" type="checkbox" checked> Display grids without brute force</label></div>
   <button id="sim-start" class="primary">Start simulation</button>
   <p id="sim-status" role="status">Ready.</p><progress id="sim-progress" value="0" max="${DEFAULT_TRIAL_COUNT}" aria-label="Completed trials"></progress>
@@ -17,7 +20,8 @@ export function mountSimulation(root: HTMLElement, options: () => GenerationOpti
   <button id="sim-prev" class="outline">Previous page</button> <button id="sim-next" class="outline">Next page</button>
   <div id="sim-results"></div><textarea id="sim-copy" readonly hidden aria-label="Puzzle string"></textarea></section>`;
   const el = <T extends HTMLElement = HTMLElement>(id: string) => root.querySelector<T>('#sim-' + id)!;
-  let worker: Worker | null = null, total = DEFAULT_TRIAL_COUNT, completed = 0, failed = 0, page = 0;
+  rememberOptions(root, 'simulation');
+  let worker: Worker | null = null, total = Number(el<HTMLSelectElement>('trials').value), completed = 0, failed = 0, page = 0;
   const scores = new Map<number, number>();
   const matches: { trial: number; result: Generated }[] = [];
   function render() {
@@ -25,7 +29,7 @@ export function mountSimulation(root: HTMLElement, options: () => GenerationOpti
     progress.max = total; progress.value = completed + failed;
     el('counts').textContent = `${completed} completed · ${matches.length} matching · ${failed} failed`;
     el('start').textContent = worker ? 'Stop simulation' : 'Start simulation';
-    for (const id of ['trials', 'min', 'logical']) el<HTMLInputElement>('' + id).disabled = !!worker;
+    root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.generation-options input, .generation-options select').forEach(input => { input.disabled = !!worker; });
     el<HTMLButtonElement>('prev').disabled = page === 0;
     el<HTMLButtonElement>('next').disabled = (page + 1) * 12 >= matches.length;
     let maximum = 0;
@@ -63,9 +67,9 @@ export function mountSimulation(root: HTMLElement, options: () => GenerationOpti
   el('start').onclick = () => {
     if (worker) { stop('Stopped. Completed results are retained.'); return; }
     total = Number(el<HTMLSelectElement>('trials').value);
-    const minimum = Number(el<HTMLInputElement>('min').value);
+    const minimum = Number(el<HTMLSelectElement>('min').value);
     const logical = el<HTMLInputElement>('logical').checked;
-    const settings = options();
+    const settings = readGenerationOptions(root, 'sim-');
     completed = failed = page = 0;
     scores.clear(); matches.length = 0;
     const active = new Worker(new URL('./solver.worker.ts', import.meta.url), { type: 'module' });

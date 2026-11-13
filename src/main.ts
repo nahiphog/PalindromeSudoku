@@ -1,4 +1,6 @@
 import { mountSimulation } from './simulation';
+import { rememberOptions } from './saved-options';
+import { generationOptionsMarkup, readGenerationOptions } from './generation-options';
 import './style.css';
 import './studio.css';
 import { decodePuzzle, encodePuzzle, example, validatePuzzle, type Puzzle } from './puzzle';
@@ -15,10 +17,10 @@ let worker: Worker | null = null, analysis: Analysis | null = null, solutions: n
 let generationStart = 0, timer: ReturnType<typeof setInterval> | undefined;
 try { const saved = localStorage.getItem('palindrome-studio-v1'); if (saved) puzzle = validatePuzzle(JSON.parse(saved)); puzzle.values = [...puzzle.givens]; } catch { /* Local storage is optional. */ }
 $('#app').innerHTML = `
-<header class="topbar"><details id="page-menu"><summary>Maker</summary><nav class="page-nav" aria-label="Pages"><a href="?page=maker">Maker</a><a href="?page=import-grid">Import grid</a><a href="?page=simulation">Simulation</a><a href="?page=techniques">Techniques</a></nav></details><a class="brand" href="./"><img class="brand-icon" src="${import.meta.env.BASE_URL}palindrome.svg" alt="12321 logo">palindrome<span class="brand-dot">.</span></a><button id="about" class="outline header-actions">About</button></header>
+<header class="topbar"><details id="page-menu"><summary>Generate</summary><nav class="page-nav" aria-label="Pages"><a href="?page=generate">Generate</a><a href="?page=import-grid">Import grid</a><a href="?page=simulation">Simulation</a><a href="?page=techniques">Techniques</a></nav></details><a class="brand" href="./"><img class="brand-icon" src="${import.meta.env.BASE_URL}palindrome.svg" alt="12321 logo">palindrome<span class="brand-dot">.</span></a><button id="about" class="outline header-actions">About</button></header>
 <main id="studio">
 <section id="import-panel" class="card settings-card" hidden><h2>Import grid</h2><p class="muted">Paste a PS1 puzzle string, exported JSON, or 81 digits with 0 or . for blanks. Loading replaces the current puzzle.</p><textarea id="import-text" aria-label="Puzzle to import" spellcheck="false"></textarea><button id="load" class="primary">Load and check puzzle</button></section>
-<section id="generation" class="card settings-card"><div class="settings-heading"><h2>Make your next puzzle</h2><span class="pill">PALINDROME SUDOKU</span></div><div class="generation-options"><label>Palindrome line lengths (comma-separated) <input id="line-lengths" type="text" value="5, 5, 5, 5"></label><label><input id="symmetric-lines" type="checkbox" checked> Rotationally symmetric lines</label><label><input id="symmetric" type="checkbox" checked> Rotationally symmetric givens</label><label><input id="empty-lines" type="checkbox" checked> Leave palindrome cells empty</label><label><input id="logical-only" type="checkbox" checked> Logical techniques only</label></div><div class="generate-row"><p class="muted">Generate a unique puzzle.</p><button id="generate" class="primary">Generate puzzle</button></div></section>
+<section id="generation" class="card settings-card"><div class="settings-heading"><h2>Make your next puzzle</h2><span class="pill">PALINDROME SUDOKU</span></div>${generationOptionsMarkup()}<div class="generate-row"><p class="muted">Generate a unique puzzle.</p><button id="generate" class="primary">Generate puzzle</button></div></section>
 <div id="status" class="status-box" role="status" aria-live="polite"><span id="status-text">Generate a puzzle or use Import grid.</span><span id="elapsed"></span><button id="cancel" class="text-button" hidden>Cancel</button></div>
 <div class="workspace"><section class="board-panel"><div class="board-heading"><span id="view-label">YOUR PUZZLE</span></div><div id="board" class="board" role="group" aria-label="Palindrome Sudoku grid"><svg id="lines" class="line-overlay" viewBox="0 0 900 900" aria-hidden="true"></svg><div id="cells" class="cells"></div></div><div class="board-footer"><span id="filled"></span></div><div class="button-pair grid-actions"><button id="reveal" class="primary" disabled>Reveal solution</button><button id="walk" class="outline" disabled>Solution walkthrough</button></div>
 <section id="walkthrough-panel" hidden><div class="walk-heading"><h2>Solution walkthrough</h2><button id="close-walk" class="text-button">Return to puzzle</button></div><p id="slide-count" class="muted"></p><h3 id="slide-title"></h3><p id="slide-description" class="muted"></p><input id="slide-range" type="range" min="0" value="0" aria-label="Solution step"><div class="button-pair"><button id="prev" class="outline">Previous step</button><button id="next" class="primary">Next step</button></div><div id="tallies"></div></section>
@@ -30,6 +32,8 @@ $('#app').innerHTML = `
 <main id="simulation" hidden></main><main id="techniques" hidden><section class="card"><h1>Techniques</h1><p class="muted">Supported solving techniques and their difficulty ratings. Points are charged per productive use.</p><div class="techniques-scroll"><table class="technique-catalog"><thead><tr><th>Technique</th><th>Rating</th><th>Level</th><th>Category</th></tr></thead><tbody>${repertoire.map(t => `<tr><td>${t.name}</td><td>+${t.score}</td><td>${t.level}</td><td>${t.category}</td></tr>`).join('')}</tbody></table></div></section></main>
 <dialog id="about-dialog"><form method="dialog"><button class="text-button close" aria-label="Close About">✕</button></form><h2>Palindrome Sudoku</h2><p>Fill each row, column and 3 × 3 box with 1–9 exactly once. Every grey line must read the same in both directions.</p><p>Solving runs locally in a cancellable worker. Difficulty is an engine estimate. A timed-out check never claims uniqueness.</p><p>Based on ThermoSudoku and its GPL-licensed sudokUI technique imports.</p></dialog>
 <dialog id="copy-dialog"><form method="dialog"><button class="text-button close">Close</button></form><h2>Copy puzzle string</h2><textarea id="copy-text" aria-label="Puzzle string" readonly></textarea></dialog>`;
+
+rememberOptions($('#generation'), 'generate');
 
 const cells = Array.from({ length: 81 }, (_, c) => {
   const button = document.createElement('div'); button.className = 'cell'; button.dataset.cell = String(c);
@@ -66,7 +70,7 @@ function render() {
     $<HTMLButtonElement>('#prev').disabled = slide === 0; $<HTMLButtonElement>('#next').disabled = slide === analysis.frames.length - 1;
   }
 }
-function generationOptions() { return { lengths: $<HTMLInputElement>('#line-lengths').value.split(',').map(value => Number(value.trim())), symmetricLines: $<HTMLInputElement>('#symmetric-lines').checked, symmetric: $<HTMLInputElement>('#symmetric').checked, emptyLines: $<HTMLInputElement>('#empty-lines').checked, logicalOnly: $<HTMLInputElement>('#logical-only').checked }; }
+function generationOptions() { return readGenerationOptions(document); }
 function start(action: 'generate' | 'check') {
   if (worker) return;
   generationStart = performance.now(); $('#elapsed').textContent = ''; $('#cancel').hidden = false;
@@ -89,10 +93,14 @@ function start(action: 'generate' | 'check') {
       else if (!result.solutions.length) status('No solution. Check the givens and mirrored positions on your lines.');
       else { solutions = result.solutions; analysis = data.analysis ?? null; status(`Exactly one solution.${data.analysisError ? ' Walkthrough unavailable: ' + data.analysisError : ' Reveal it or follow the walkthrough.'}`); }
     }
-    if (analysis) { slide = 0; renderTechniqueTallies($('#tallies'), analysis); }
+    if (analysis) { slide = 0; renderTechniqueTallies($('#tallies'), analysis, navigateToStep); }
     render();
   };
   worker.postMessage({ action, puzzle, options: generationOptions() }); render();
+}
+function navigateToStep(index: number) {
+  slide = index; revealed = false; render();
+  $('#board').scrollIntoView({ block: 'start' });
 }
 function showAlternatives() {
   $('#alternatives').hidden = false;
@@ -125,20 +133,21 @@ $('#image').onclick = () => {
   canvas.toBlob(blob => { if (blob) download(blob, 'palindrome-sudoku.png'); });
 };
 function navigate() {
-  const page = new URL(location.href).searchParams.get('page') ?? 'maker';
+  if (location.href.includes('#')) window.history.replaceState(window.history.state, '', location.pathname + location.search);
+  const page = new URL(location.href).searchParams.get('page') ?? 'generate';
   $('#studio').hidden = page === 'techniques' || page === 'simulation'; $('#simulation').hidden = page !== 'simulation'; $('#techniques').hidden = page !== 'techniques'; $('#import-panel').hidden = page !== 'import-grid'; $('#generation').hidden = page === 'import-grid';
-  $('#page-menu summary').textContent = page === 'simulation' ? 'Simulation' : page === 'techniques' ? 'Techniques' : page === 'import-grid' ? 'Import grid' : 'Maker';
+  $('#page-menu summary').textContent = page === 'simulation' ? 'Simulation' : page === 'techniques' ? 'Techniques' : page === 'import-grid' ? 'Import grid' : 'Generate';
 }
 document.querySelectorAll<HTMLAnchorElement>('.page-nav a').forEach(link => link.onclick = event => { event.preventDefault(); window.history.pushState({}, '', link.href); $<HTMLDetailsElement>('#page-menu').open = false; navigate(); });
-mountSimulation($('#simulation'), generationOptions, result => {
+mountSimulation($('#simulation'), result => {
   if (worker) cancel();
   invalidate();
   puzzle = result.puzzle; solutions = [result.solution]; analysis = result.analysis; slide = 0;
-  renderTechniqueTallies($('#tallies'), analysis);
+  renderTechniqueTallies($('#tallies'), analysis, navigateToStep);
   save();
   status('Simulation result · ' + analysis.score + ' points');
-  window.history.pushState({}, '', '?page=maker');
+  window.history.pushState({}, '', '?page=generate');
   navigate(); render();
   $('#walkthrough-panel').scrollIntoView({ block: 'start' });
 });
-window.onpopstate = navigate; navigate(); render();
+window.onpopstate = navigate; window.onhashchange = navigate; navigate(); render();
