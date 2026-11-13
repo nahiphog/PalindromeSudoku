@@ -1,20 +1,23 @@
 import type { Generated, GenerationOptions } from './generator';
 import { encodePuzzle } from './puzzle';
 
+const TRIAL_COUNTS = [1, 10, 100, 1000, 10000, 100000, 1000000];
+const DEFAULT_TRIAL_COUNT = 1000000;
+
 export function mountSimulation(root: HTMLElement, options: () => GenerationOptions, open: (result: Generated) => void) {
   root.innerHTML = `<section class="card"><h1>Simulation</h1>
   <p>Generate and rate multiple puzzles using the current Maker settings.</p>
-  <div class="generation-options"><label>Total trials <select id="sim-trials"><option>1</option><option selected>10</option><option>100</option><option>1000</option></select></label>
+  <div class="generation-options"><label>Total trials <select id="sim-trials">${TRIAL_COUNTS.map(count => `<option value="${count}"${count === DEFAULT_TRIAL_COUNT ? ' selected' : ''}>${count.toLocaleString()}</option>`).join('')}</select></label>
   <label>Minimum difficulty <input id="sim-min" type="number" min="0" value="0"></label>
   <label><input id="sim-logical" type="checkbox" checked> Display grids without brute force</label></div>
   <button id="sim-start" class="primary">Start simulation</button>
-  <p id="sim-status" role="status">Ready.</p><progress id="sim-progress" value="0" max="10" aria-label="Completed trials"></progress>
+  <p id="sim-status" role="status">Ready.</p><progress id="sim-progress" value="0" max="${DEFAULT_TRIAL_COUNT}" aria-label="Completed trials"></progress>
   <p id="sim-counts"></p><h2>Difficulty distribution</h2><div id="sim-chart"></div>
   <h2>Matching grids</h2><p>Highest difficulty first.</p>
   <button id="sim-prev" class="outline">Previous page</button> <button id="sim-next" class="outline">Next page</button>
   <div id="sim-results"></div><textarea id="sim-copy" readonly hidden aria-label="Puzzle string"></textarea></section>`;
   const el = <T extends HTMLElement = HTMLElement>(id: string) => root.querySelector<T>('#sim-' + id)!;
-  let worker: Worker | null = null, total = 10, completed = 0, failed = 0, page = 0;
+  let worker: Worker | null = null, total = DEFAULT_TRIAL_COUNT, completed = 0, failed = 0, page = 0;
   const scores = new Map<number, number>();
   const matches: { trial: number; result: Generated }[] = [];
   function render() {
@@ -25,7 +28,9 @@ export function mountSimulation(root: HTMLElement, options: () => GenerationOpti
     for (const id of ['trials', 'min', 'logical']) el<HTMLInputElement>('' + id).disabled = !!worker;
     el<HTMLButtonElement>('prev').disabled = page === 0;
     el<HTMLButtonElement>('next').disabled = (page + 1) * 12 >= matches.length;
-    const width = Math.max(250, Math.ceil((Math.max(0, ...scores.keys()) + 1) / 5000) * 250);
+    let maximum = 0;
+    for (const score of scores.keys()) maximum = Math.max(maximum, score);
+    const width = Math.max(250, Math.ceil((maximum + 1) / 5000) * 250);
     const bins = new Map<number, number>();
     for (const [score, count] of scores) {
       const low = Math.floor(score / width) * width;
