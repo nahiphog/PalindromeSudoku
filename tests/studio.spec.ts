@@ -4,8 +4,9 @@ test('solves, replays, generates, and preserves the original givens on reveal', 
   await page.goto('/');
   await expect(page).toHaveTitle('Palindrome Sudoku Studio');
   expect(await page.locator('link[rel=icon]').getAttribute('href')).toContain('palindrome.svg');
-  await page.getByRole('button', { name: 'Check & solve', exact: true }).click();
-  await expect(page.locator('#status-text')).toContainText('Exactly one solution', { timeout: 30000 });
+  await page.getByRole('button', { name: 'Generate puzzle', exact: true }).click();
+  await expect(page.locator('#status-text')).toContainText('Unique puzzle generated', { timeout: 60000 });
+  await expect(page.getByRole('slider', { name: 'Solution step' })).toBeVisible();
   const givens = await page.locator('#cells .digit').count();
   await page.getByRole('button', { name: 'Reveal solution', exact: true }).click();
   await expect(page.locator('#cells .digit')).toHaveCount(81);
@@ -50,3 +51,13 @@ test('mobile layout, technique catalogue, and cancellation', async ({ page }) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+
+test('runs a simulation trial and opens its walkthrough', async ({ page }) => {
+  await page.goto('/?page=simulation');
+  await page.getByLabel('Total trials').selectOption('1');
+  await page.getByRole('button', { name: 'Start simulation' }).click();
+  await expect(page.locator('#sim-status')).toHaveText('Simulation complete.', { timeout: 60000 });
+  await expect(page.locator('#sim-counts')).toContainText('1 completed');
+  await page.getByRole('button', { name: 'View walkthrough' }).click();
+  await expect(page.getByRole('slider', { name: 'Solution step' })).toBeVisible();
+});
