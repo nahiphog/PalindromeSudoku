@@ -106,6 +106,28 @@ test('highlights Swordfish evidence and eliminations in the reported puzzle', as
   expect(await page.locator('#cells .pencil > span').evaluateAll(marks => marks.filter(mark => mark.textContent).length)).toBeGreaterThan(0);
 });
 
+test('shows only successful guesses and charges each Brute force step once', async ({ page }) => {
+  await page.goto('/?page=import-grid');
+  await page.getByLabel('Puzzle to import').fill('PS1|000103700400000050000020000000070005000204000900060000000010000020000006004605000|3132334352;7978776758;7273636251;3837474859');
+  await page.getByRole('button', { name: 'Load and check puzzle' }).click();
+  await expect(page.locator('#status-text')).toContainText('Exactly one solution.');
+  const count = Number((await page.locator('#slide-count').innerText()).split(' of ')[1]);
+  expect(count).toBeLessThan(150);
+  const guesses = page.locator('.technique-tallies tbody tr').filter({ has: page.getByRole('rowheader', { name: 'Brute force', exact: true }) }).getByRole('button');
+  await expect(guesses).toHaveCount(4);
+  console.log(`Reported puzzle: ${count} steps, ${await guesses.count()} Brute force guesses. ${await page.locator('#import-summary').innerText()}`);
+  for (const guess of await guesses.all()) {
+    await guess.click();
+    await expect(page.locator('#slide-description')).toContainText('Brute force correctly guesses');
+    await expect(page.locator('#slide-description')).toContainText('+10,000 difficulty points');
+    await expect(page.locator('#cells .step-placement')).toHaveCount(1);
+  }
+  await expect(page.locator('.tally-note')).toContainText('Failed trials are omitted');
+  await page.locator('#slide-range').fill(String(count - 1));
+  await expect(page.locator('#slide-title')).toHaveText('Puzzle complete');
+  await expect(page.locator('#cells .digit')).toHaveCount(81);
+});
+
 test('keeps page URLs free of fragments', async ({ page }) => {
   await page.goto('/?page=simulation#sim-results');
   await expect(page).toHaveURL(/\?page=simulation$/);

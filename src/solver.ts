@@ -1,4 +1,5 @@
 import { findPhistomefelRing } from './phistomefel-ring';
+import { findPalindromeLockedCandidates } from './palindrome-locked';
 import { bit, cloneGrid, digitsOf, gridFromValues, isBroken, isSolved, PEERS, popcount, setValue, type Grid } from './vendor/sudokui/board';
 import type { Step } from './techniques';
 import { findFullHouse, findHiddenSingle, findNakedSingle } from './vendor/sudokui/techniques/singles';
@@ -19,9 +20,9 @@ const finders: ((g: Grid) => Step | null)[] = [
   (g: Grid) => findTurbotFamily(g, 'SKYSCRAPER'), (g: Grid) => findTurbotFamily(g, 'TWO_STRING_KITE'), findEmptyRectangle,
   findPhistomefelRing,
 ];
-export function nextLogicalStep(g: Grid): Step | null {
+export function nextLogicalStep(g: Grid, lines: number[][] = []): Step | null {
   for (const finder of finders) { const step = finder(g); if (step) return step; }
-  return null;
+  return lines.length ? findPalindromeLockedCandidates(g, lines) : null;
 }
 export function applyLogicalStep(g: Grid, step: Step): void {
   for (const { cell, digit } of step.eliminations) g.cands[cell] &= ~bit(digit);
@@ -64,7 +65,7 @@ export function hint(p: Puzzle): Hint | null {
   const narrowed = [...g.cands].filter((mask, i) => !g.values[i] && mask !== base.cands[i]).length;
   const descriptions: string[] = narrowed ? [`Palindrome matching narrows the candidates in ${narrowed} cells before applying Sudoku techniques.`] : [];
   for (let iteration = 0; iteration < 200; iteration++) {
-    const step = finders.reduce<Step | null>((found, fn) => found ?? fn(g), null);
+    const step = nextLogicalStep(g, p.lines);
     if (!step) return descriptions.length ? { description: descriptions.join('\n'), values: [...g.values], candidates: [...g.cands], technique: 'Candidate eliminations' } : null;
     for (const { cell, digit } of step.eliminations) g.cands[cell] &= ~bit(digit);
     for (const { cell, digit } of step.placements) setValue(g, cell, digit);
@@ -88,7 +89,7 @@ export function solve(p: Puzzle, budgetMs = 5000, logical = true): SolveResult {
     while (true) {
       if (!propagate(g, p.lines)) return;
       if (performance.now() >= deadline) { result.exhausted = false; return; }
-      const step = logical ? nextLogicalStep(g) : findNakedSingle(g) ?? findHiddenSingle(g);
+      const step = logical ? nextLogicalStep(g, p.lines) : findNakedSingle(g) ?? findHiddenSingle(g);
       if (!step) break;
       applyLogicalStep(g, step);
     }

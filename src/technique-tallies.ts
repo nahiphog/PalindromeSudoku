@@ -5,7 +5,7 @@ const scores = new Map(Object.values(TECHS).map(info => [info.name.toLowerCase()
 scores.set('palindrome matching', 5);
 export const techniqueScore = (name: string) => scores.get(name.toLowerCase()) ?? Infinity;
 
-/** Step references cover the complete recorded solve, including unsuccessful trial branches. */
+/** Step references and counts cover only the successful solution path. */
 export function renderTechniqueTallies(container: HTMLElement, analysis: Analysis, navigateToStep: (index: number) => void) {
   const stepsByTechnique = new Map<string, number[]>();
   analysis.frames.forEach((frame, index) => {
@@ -34,7 +34,7 @@ export function renderTechniqueTallies(container: HTMLElement, analysis: Analysi
   }
   const note = document.createElement('p'); note.className = 'tally-note';
   note.textContent = Object.keys(analysis.techniques).length
-    ? `Steps from the entire walkthrough, including failed trial branches. Click a step number to view it. Backtracking rollbacks: ${analysis.backtracks}.`
+    ? 'Steps on the successful solution path. Failed trials are omitted and do not add to the rating. Each Brute force step adds 10,000 points. Click a step number to view it.'
     : 'No solving techniques were needed: the imported grid was already complete.';
   container.replaceChildren(table, note);
 }

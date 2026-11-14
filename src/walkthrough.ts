@@ -11,7 +11,7 @@ export type Highlights = Pick<Step, 'primary' | 'secondary' | 'fins' | 'units' |
 
 export interface Frame { title: string; description: string; values: number[]; candidates: number[]; placements: CellDigit[]; eliminations: CellDigit[]; highlights: Highlights; kind: 'start' | 'logic' | 'palindrome' | 'guess' | 'contradiction' | 'backtrack' | 'finish' }
 export interface Analysis { frames: Frame[]; score: number; level: Level; hardest: string; guesses: number; backtracks: number; techniques: Record<string, number> }
-/** A replay of the actual solving process, including failed trials and rollback.
+/** The successful solving path; failed trial branches are discarded with their scores.
  * This is an estimate: upstream technique weights + 5 per palindrome reduction +
  * 10000 per Brute force use. Trials always force Extreme, never masquerade as deductions. */
 export class LogicalSolveStalled extends Error { constructor() { super('The supported logical techniques cannot complete this puzzle without Brute force.'); } }
@@ -57,12 +57,20 @@ export function analyze(p: Puzzle, budgetMs = 10000, allowBruteForce = true): An
     for (let c = 0; c < 81; c++) if (!g.values[c] && popcount(g.cands[c]) < count) { cell = c; count = popcount(g.cands[c]); }
     const digits = digitsOf(g.cands[cell]);
     for (const d of digits) {
+      const checkpoint = {
+        length: result.frames.length, score: result.score, level: result.level,
+        hardest: result.hardest, hardestWeight, guesses: result.guesses,
+        techniques: { ...result.techniques },
+      };
       const next = cloneGrid(g); setValue(next, cell, d); result.guesses++;
       credit('Brute force', 10000, 'Extreme');
-      add(next, 'guess', 'Brute force', `No supported logical technique applies. Try ${cellName(cell)} = ${d} from candidates ${digits.join(', ')}. This is an assumption, not a deduction.`, [{ cell, digit: d }]);
+      add(next, 'guess', 'Brute force', `Brute force correctly guesses ${cellName(cell)} = ${d} from candidates ${digits.join(', ')}. This choice leads to the solution; it is a guess, not a logical deduction. +10,000 difficulty points.`, [{ cell, digit: d }]);
       const completed = search(next); if (completed) return completed;
       result.backtracks++;
-      add(g, 'backtrack', 'Restore previous position', `The trial ${cellName(cell)} = ${d} cannot be completed. Undo that branch and try the next candidate.`);
+      result.frames.length = checkpoint.length;
+      result.score = checkpoint.score; result.level = checkpoint.level;
+      result.hardest = checkpoint.hardest; hardestWeight = checkpoint.hardestWeight;
+      result.guesses = checkpoint.guesses; result.techniques = checkpoint.techniques;
     }
     return null;
   }

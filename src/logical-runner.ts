@@ -19,7 +19,7 @@ export function runLogical(g: Grid, p: Puzzle, deadline: number, observer?: {
       if (removed.length) observer!.palindrome(removed);
     }
     if (isSolved(g)) return 'solved';
-    const step = nextLogicalStep(g);
+    const step = nextLogicalStep(g, p.lines);
     if (!step) return 'stalled';
     applyLogicalStep(g, step); observer?.step(step);
   }

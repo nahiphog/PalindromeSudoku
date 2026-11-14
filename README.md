@@ -76,8 +76,15 @@ certification, walkthroughs, and tallies. Future categories must preserve normal
 not automatically changed.
 
 Other ratings use the imported sudokUI weights; palindrome reduction rounds add
-5 and each brute-force trial adds 10,000. Difficulty is an engine-dependent
-estimate, not a calibrated measure of human difficulty.
+5 and palindrome locked candidates add 50. The latter transports a house's
+possible digit positions through mirrored equality and removes that digit from
+cells seen in every case.
+
+Walkthroughs retain only the successful solution path. Each retained Brute force
+guess adds 10,000 points and is explicitly labeled as a guess. Failed branches,
+their deductions, and their scores are discarded; technique tallies refer only
+to displayed steps. Difficulty is an engine-dependent estimate, not a calibrated
+measure of human difficulty.
 
 ## Generation and limits
 
