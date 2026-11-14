@@ -1,4 +1,5 @@
 import { mountSimulation } from './simulation';
+import { walkthroughHighlights } from './walkthrough-highlights';
 import { rememberOptions } from './saved-options';
 import { generationOptionsMarkup, readGenerationOptions } from './generation-options';
 import './style.css';
@@ -33,6 +34,10 @@ $('#app').innerHTML = `
 <dialog id="about-dialog"><form method="dialog"><button class="text-button close" aria-label="Close About">✕</button></form><h2>Palindrome Sudoku</h2><p>Fill each row, column and 3 × 3 box with 1–9 exactly once. Every grey line must read the same in both directions.</p><p>Solving runs locally in a cancellable worker. Difficulty is an engine estimate. A timed-out check never claims uniqueness.</p><p>Based on ThermoSudoku and its GPL-licensed sudokUI technique imports.</p></dialog>
 <dialog id="copy-dialog"><form method="dialog"><button class="text-button close">Close</button></form><h2>Copy puzzle string</h2><textarea id="copy-text" aria-label="Puzzle string" readonly></textarea></dialog>`;
 
+const highlightLegend = document.createElement('p');
+highlightLegend.className = 'highlight-legend';
+highlightLegend.innerHTML = '<span class="legend-primary">Blue: pattern</span> · <span class="legend-secondary">Amber: support</span> · <span class="legend-fins">Purple: special cells</span> · <span class="legend-placement">Green: placement</span> · <span class="legend-elimination">Red / crossed out: removal</span>. Pale shading marks the related rows, columns, or boxes.';
+$('#slide-description').after(highlightLegend);
 rememberOptions($('#generation'), 'generate');
 
 const cells = Array.from({ length: 81 }, (_, c) => {
@@ -48,12 +53,23 @@ function render() {
   const frame = slide !== null ? analysis?.frames[slide] : undefined;
   const values = frame?.values ?? (revealed ? solutions[0] : puzzle.values);
   const bad = conflicts(puzzle), masks = frame?.candidates ?? [];
+  const highlights = walkthroughHighlights(frame);
   $('#lines').innerHTML = lineMarkup(puzzle.lines);
   cells.forEach((button, c) => {
     button.className = ['cell', c % 9 === 2 || c % 9 === 5 ? 'box-right' : '', [2, 5].includes(Math.floor(c / 9)) ? 'box-bottom' : '', puzzle.givens[c] ? 'given' : '', !revealed && !frame && bad.has(c) ? 'conflict' : '', frame?.placements.some(p => p.cell === c) ? 'step-placement' : ''].join(' ');
+    for (const role of ['primary', 'secondary', 'fins'] as const) {
+      if (highlights.cells[role].has(c)) button.classList.add(`step-${role}`);
+      if (highlights.bands[role].has(c)) button.classList.add(`step-band-${role}`);
+    }
+    if (frame?.eliminations.some(e => e.cell === c)) button.classList.add('step-elimination');
     button.setAttribute('aria-label', `Row ${Math.floor(c / 9) + 1}, column ${c % 9 + 1}, ${values[c] || 'empty'}`);
     const removed = frame?.eliminations.filter(e => e.cell === c).map(e => e.digit) ?? [];
     button.innerHTML = values[c] ? `<span class="digit">${values[c]}</span>` : masks.length ? `<span class="pencil">${Array.from({ length: 9 }, (_, i) => `<span class="${removed.includes(i + 1) ? 'removed-candidate' : ''}">${digitsOf(masks[c]).includes(i + 1) || removed.includes(i + 1) ? i + 1 : ''}</span>`).join('')}</span>` : '';
+    for (const role of ['primary', 'secondary', 'fins'] as const) {
+      button.querySelectorAll<HTMLElement>('.pencil > span').forEach((mark, index) => {
+        if (mark.textContent && highlights.candidates[role].has(`${c}:${index + 1}`)) mark.classList.add(`candidate-${role}`);
+      });
+    }
   });
   $('#filled').textContent = `${puzzle.givens.filter(Boolean).length} givens · ${puzzle.lines.length} lines`;
   $('#view-label').textContent = frame ? 'SOLUTION WALKTHROUGH' : revealed ? 'VERIFIED SOLUTION' : 'YOUR PUZZLE';

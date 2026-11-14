@@ -5,8 +5,11 @@ import { type Puzzle } from './puzzle';
 import { bit, cellName, cloneGrid, digitsOf, gridFromValues, isSolved, popcount, setValue, type Grid } from './vendor/sudokui/board';
 import { LEVELS, LEVEL_MAX_SCORE, type Level } from './vendor/sudokui/ratings';
 import type { CellDigit } from './vendor/sudokui/steps';
+import type { Step } from './techniques';
 
-export interface Frame { title: string; description: string; values: number[]; candidates: number[]; placements: CellDigit[]; eliminations: CellDigit[]; kind: 'start' | 'logic' | 'palindrome' | 'guess' | 'contradiction' | 'backtrack' | 'finish' }
+export type Highlights = Pick<Step, 'primary' | 'secondary' | 'fins' | 'units' | 'links' | 'chainCells' | 'sets' | 'labels'>;
+
+export interface Frame { title: string; description: string; values: number[]; candidates: number[]; placements: CellDigit[]; eliminations: CellDigit[]; highlights: Highlights; kind: 'start' | 'logic' | 'palindrome' | 'guess' | 'contradiction' | 'backtrack' | 'finish' }
 export interface Analysis { frames: Frame[]; score: number; level: Level; hardest: string; guesses: number; backtracks: number; techniques: Record<string, number> }
 /** A replay of the actual solving process, including failed trials and rollback.
  * This is an estimate: upstream technique weights + 5 per palindrome reduction +
@@ -17,9 +20,9 @@ export function analyze(p: Puzzle, budgetMs = 10000, allowBruteForce = true): An
   const deadline = performance.now() + budgetMs;
   let hardestWeight = -1;
   if (conflicts(p).size) throw new Error('Cannot analyze a contradictory puzzle.');
-  const add = (g: Grid, kind: Frame['kind'], title: string, description: string, placements: CellDigit[] = [], eliminations: CellDigit[] = []) => {
+  const add = (g: Grid, kind: Frame['kind'], title: string, description: string, placements: CellDigit[] = [], eliminations: CellDigit[] = [], highlights: Highlights = {}) => {
     if (result.frames.length >= 20000 || performance.now() >= deadline) throw new Error('Analysis budget reached before a complete walkthrough was recorded. Try generating again.');
-    result.frames.push({ title, description, values: [...g.values], candidates: [...g.cands], kind, placements, eliminations });
+    result.frames.push({ title, description, values: [...g.values], candidates: [...g.cands], kind, placements, eliminations, highlights });
   };
   const credit = (name: string, score: number, level: Level) => {
     result.score += score; result.techniques[name] = (result.techniques[name] ?? 0) + 1;
@@ -29,12 +32,20 @@ export function analyze(p: Puzzle, budgetMs = 10000, allowBruteForce = true): An
   function search(g: Grid): Grid | null {
     const state = runLogical(g, p, deadline, {
       palindrome: removed => {
-        add(g, 'palindrome', 'Palindrome matching', `Remove ${removed.length} candidates incompatible with mirrored equality on a palindrome. Grey marks remain possible; crossed red marks were removed.`, [], removed);
+        const affected = new Set(removed.map(({ cell }) => cell));
+        const mirrored = new Set<number>();
+        for (const line of p.lines) for (let i = 0; i < Math.floor(line.length / 2); i++) {
+          const a = line[i], b = line[line.length - 1 - i];
+          if (affected.has(a) || affected.has(b)) { mirrored.add(a); mirrored.add(b); }
+        }
+        const primary = [...mirrored].flatMap(cell => digitsOf(g.values[cell] ? bit(g.values[cell]) : g.cands[cell]).map(digit => ({ cell, digit })));
+        add(g, 'palindrome', 'Palindrome matching', `Remove ${removed.length} candidates incompatible with mirrored equality on a palindrome. Highlighted cells are the affected mirrored pairs; crossed red marks were removed.`, [], removed, { primary });
         credit('Palindrome matching', 5, 'Easy');
       },
       step: step => {
         const info = TECHS[step.tech]; credit(info.name, info.score, info.level);
-        add(g, 'logic', info.name, step.description, step.placements, step.eliminations);
+        const { primary, secondary, fins, units, links, chainCells, sets, labels } = step;
+        add(g, 'logic', info.name, step.description, step.placements, step.eliminations, { primary, secondary, fins, units, links, chainCells, sets, labels });
       },
     });
     if (state === 'solved') return g;

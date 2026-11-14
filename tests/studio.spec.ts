@@ -70,6 +70,23 @@ test('mobile layout, technique catalogue, and cancellation', async ({ page }) =>
 });
 
 
+test('highlights Swordfish evidence and eliminations in the reported puzzle', async ({ page }) => {
+  await page.goto('/?page=import-grid');
+  await page.getByLabel('Puzzle to import').fill('PS1|000000980073004000000020000520040009000809000900060047000050000000600490067000000|5343322131;5767788979;5262728171;5848382939');
+  await page.getByRole('button', { name: 'Load and check puzzle' }).click();
+  await expect(page.locator('#status-text')).toContainText('Exactly one solution.');
+  await page.getByRole('button', { name: 'Go to step 18: Swordfish', exact: true }).click();
+  await expect(page.locator('#slide-title')).toHaveText('Swordfish');
+  await expect(page.locator('#cells .step-band-primary')).toHaveCount(27);
+  await expect(page.locator('#cells .step-band-secondary')).toHaveCount(27);
+  expect(await page.locator('#cells .step-primary').count()).toBeGreaterThanOrEqual(6);
+  expect(await page.locator('#cells .candidate-primary').count()).toBeGreaterThanOrEqual(6);
+  expect(await page.locator('#cells .step-elimination .removed-candidate').count()).toBeGreaterThan(0);
+  await page.locator('.board-panel').screenshot({ path: 'test-results/swordfish-highlights.png' });
+  await page.getByRole('button', { name: 'Return to puzzle' }).click();
+  await expect(page.locator('#cells [class*="step-"]')).toHaveCount(0);
+});
+
 test('keeps page URLs free of fragments', async ({ page }) => {
   await page.goto('/?page=simulation#sim-results');
   await expect(page).toHaveURL(/\?page=simulation$/);
