@@ -9,7 +9,7 @@ const DEFAULT_TRIAL_COUNT = 1000000;
 export function mountSimulation(root: HTMLElement, open: (result: Generated) => void) {
   root.innerHTML = `<section class="card"><h1>Simulation</h1>
   <p>Choose generation settings and rate multiple puzzles.</p>
-  ${generationOptionsMarkup('sim-')}
+  ${generationOptionsMarkup('sim-', '5, 5, 5, 5')}
   <div class="generation-options"><label>Total trials <select id="sim-trials">${TRIAL_COUNTS.map(count => `<option value="${count}"${count === DEFAULT_TRIAL_COUNT ? ' selected' : ''}>${count.toLocaleString()}</option>`).join('')}</select></label>
   <label>Minimum difficulty <select id="sim-min">${[0, 500, 1000, 2000, 10000, 10000000].map(value => `<option value="${value}"${value === 1000 ? ' selected' : ''}>${value.toLocaleString()}</option>`).join('')}</select></label>
   <label><input id="sim-logical" type="checkbox" checked> Display grids without brute force</label></div>

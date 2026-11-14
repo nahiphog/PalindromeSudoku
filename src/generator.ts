@@ -40,7 +40,18 @@ export function findLines(values: number[], lengths: number[], symmetric: boolea
     let line: number[] | null = null;
     for (const center of centers) {
       if (used.has(center) || (partner >= 0 && (center === 40 || used.has(80 - center)))) continue;
-      line = extend([center]);
+      if (length % 2) {
+        line = extend([center]);
+      } else {
+        // Even palindromes start with adjacent equal digits across a box boundary.
+        for (const other of shuffle(neighbors[center], random)) {
+          if (used.has(other) || values[center] !== values[other]) continue;
+          if (partner >= 0 && (other === 40 || center + other === 80 ||
+            used.has(80 - other) || values[80 - center] !== values[80 - other])) continue;
+          line = extend([center, other]);
+          if (line) break;
+        }
+      }
       if (line) break;
     }
     if (!line) return null;
@@ -54,9 +65,9 @@ export function findLines(values: number[], lengths: number[], symmetric: boolea
  * Logical-only generation retries layouts whose final clue set needs search. */
 export function generate(options: GenerationOptions, progress: (text: string) => void = () => {}, random = Math.random, budgetMs = 60000): Generated {
   const { lengths, symmetricLines = true } = options;
-  if (!lengths.length || lengths.length > 12 || lengths.some(n => ![3, 5, 7, 9].includes(n)) ||
+  if (!lengths.length || lengths.length > 12 || lengths.some(n => !Number.isInteger(n) || n < 2 || n > 15) ||
     lengths.reduce((sum, n) => sum + n, 0) > 65) {
-    throw new Error('Enter 1–12 comma-separated lengths of 3, 5, 7 or 9, totaling at most 65 cells.');
+    throw new Error('Enter 1–12 comma-separated whole-number lengths from 2 to 15, totaling at most 65 cells.');
   }
   const unpaired = [...new Set(lengths)].filter(n => lengths.filter(length => length === n).length % 2);
   if (symmetricLines && unpaired.length > 0) {

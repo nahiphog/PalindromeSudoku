@@ -1,8 +1,8 @@
 import type { GenerationOptions } from './generator';
 
-export function generationOptionsMarkup(prefix = '') {
+export function generationOptionsMarkup(prefix = '', defaultLengths = '6,6,6,6') {
   return `<div class="generation-options">
-    <label>Palindrome line lengths (comma-separated) <input id="${prefix}line-lengths" type="text" value="5, 5, 5, 5"></label>
+    <label>Palindrome line lengths (comma-separated) <input id="${prefix}line-lengths" type="text" value="${defaultLengths}" placeholder="6,6,6,6" aria-describedby="${prefix}line-lengths-hint"><span id="${prefix}line-lengths-hint" class="muted">Lengths 2–15 supported; for example, 6,6,6,6.</span></label>
     <label><input id="${prefix}symmetric-lines" type="checkbox" checked> Rotationally symmetric lines</label>
     <label><input id="${prefix}symmetric" type="checkbox" checked> Rotationally symmetric givens</label>
     <label><input id="${prefix}empty-lines" type="checkbox" checked> Leave palindrome cells empty</label>

@@ -24,7 +24,7 @@ describe('palindrome constraints', () => {
     expect(g.cands[21]).toBe(bit(3)); expect(g.cands[41]).toBe(bit(3));
     expect(propagate(g, [[21, 11, 1].reverse(), [41, 31, 21]])).toBe(true);
   });
-  it('rejects equal mirrored peers, incompatible givens, and even-length lines', () => {
+  it('rejects equal mirrored peers and incompatible givens', () => {
     for (const line of [[0, 1, 2], [0, 1], [0, 10, 20, 30]]) {
       const p = blank(); p.lines = [line]; expect(candidates(p).valid).toBe(false); expect(solve(p).solutions).toEqual([]);
     }
@@ -43,6 +43,25 @@ describe('palindrome constraints', () => {
     expect(() => decodePuzzle('not a puzzle')).toThrow();
   });
 });
+
+it.each([[6, 6, 6, 6], [2, 2, 4, 4, 8, 8], [3, 3, 6, 6], [14, 14], [15, 15]])('generates even and mixed palindrome lengths %j', (...lengths) => {
+  let seed = 44;
+  const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const { puzzle, solution, analysis } = generate({ lengths, symmetric: true, logicalOnly: true }, () => {}, random, 15000);
+  expect(puzzle.lines.map(line => line.length).sort()).toEqual([...lengths].sort());
+  expect(validatePuzzle(puzzle)).toEqual(puzzle);
+  audit(solution, puzzle.lines);
+  for (const line of puzzle.lines) {
+    expect(puzzle.lines).toContainEqual(line.map(cell => 80 - cell));
+    for (const cell of line) expect(puzzle.givens[cell]).toBe(0);
+  }
+  puzzle.givens.forEach((v, c, values) => expect(Boolean(v)).toBe(Boolean(values[80 - c])));
+  const result = solve(puzzle, 10000);
+  expect(result.exhausted).toBe(true);
+  expect(result.solutions).toEqual([solution]);
+  expect(analysis.guesses).toBe(0);
+  expect(analysis.frames.at(-1)?.values).toEqual(solution);
+}, 30000);
 describe('generation', () => {
   it('generates unique, symmetric, logically solved puzzles with correct line lengths', () => {
     let seed = 92; const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
