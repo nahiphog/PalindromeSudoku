@@ -1,11 +1,12 @@
 import { mountSimulation } from './simulation';
 import { walkthroughHighlights } from './walkthrough-highlights';
+import { snyderNotes } from './notation';
 import { rememberOptions } from './saved-options';
 import { generationOptionsMarkup, readGenerationOptions } from './generation-options';
 import './style.css';
 import './studio.css';
 import { decodePuzzle, encodePuzzle, example, validatePuzzle, type Puzzle } from './puzzle';
-import { conflicts, type SolveResult } from './solver';
+import { candidates, conflicts, type SolveResult } from './solver';
 import { digitsOf } from './vendor/sudokui/board';
 import { repertoire } from './techniques-page';
 import { renderTechniqueTallies } from './technique-tallies';
@@ -38,6 +39,22 @@ const highlightLegend = document.createElement('p');
 highlightLegend.className = 'highlight-legend';
 highlightLegend.innerHTML = '<span class="legend-primary">Blue: pattern</span> · <span class="legend-secondary">Amber: support</span> · <span class="legend-fins">Purple: special cells</span> · <span class="legend-placement">Green: placement</span> · <span class="legend-elimination">Red / crossed out: removal</span>. Pale shading marks the related rows, columns, or boxes.';
 $('#slide-description').after(highlightLegend);
+const importSummary = document.createElement('p');
+importSummary.id = 'import-summary'; importSummary.className = 'import-summary';
+importSummary.setAttribute('role', 'status');
+$('#load').after(importSummary);
+const notationControl = document.createElement('label');
+notationControl.className = 'notation-control';
+notationControl.innerHTML = 'Notation <select id="notation" aria-label="Notation" aria-describedby="notation-help"><option value="hidden">Hidden</option><option value="snyder">Snyder</option><option value="all" selected>All candidates</option></select><span id="notation-help">Snyder marks digits with exactly two possible cells in a box.</span>';
+$('.board-footer').after(notationControl);
+try {
+  const saved = localStorage.getItem('palindrome-notation-v1');
+  if (saved && ['hidden', 'snyder', 'all'].includes(saved)) $<HTMLSelectElement>('#notation').value = saved;
+} catch { /* Optional storage. */ }
+$('#notation').onchange = () => {
+  try { localStorage.setItem('palindrome-notation-v1', $<HTMLSelectElement>('#notation').value); } catch { /* Optional storage. */ }
+  render();
+};
 rememberOptions($('#generation'), 'generate');
 
 const cells = Array.from({ length: 81 }, (_, c) => {
@@ -52,7 +69,15 @@ function lineMarkup(lines: number[][]) { return lines.map(line => `<polyline poi
 function render() {
   const frame = slide !== null ? analysis?.frames[slide] : undefined;
   const values = frame?.values ?? (revealed ? solutions[0] : puzzle.values);
-  const bad = conflicts(puzzle), masks = frame?.candidates ?? [];
+  const bad = conflicts(puzzle);
+  const notation = $<HTMLSelectElement>('#notation').value;
+  let masks: number[] = frame?.candidates ?? [];
+  if (!frame && !revealed && notation !== 'hidden') {
+    const state = candidates(puzzle);
+    if (state.valid) masks = [...state.grid.cands];
+  }
+  if (notation === 'hidden') masks = [];
+  else if (notation === 'snyder') masks = snyderNotes(values, masks);
   const highlights = walkthroughHighlights(frame);
   $('#lines').innerHTML = lineMarkup(puzzle.lines);
   cells.forEach((button, c) => {
@@ -78,7 +103,12 @@ function render() {
   $<HTMLButtonElement>('#reveal').disabled = !!worker || solutions.length !== 1;
   $<HTMLButtonElement>('#walk').disabled = !!worker || !analysis;
   $('#reveal').textContent = revealed ? 'Hide solution' : 'Reveal solution';
-  $('#report').hidden = !analysis;
+  const importing = new URL(location.href).searchParams.get('page') === 'import-grid';
+  $('#report').hidden = importing || !analysis;
+  $('.workspace aside').hidden = importing;
+  $('.workspace').classList.toggle('import-workspace', importing);
+  const difficulty = analysis ? `${analysis.level} · ${analysis.score.toLocaleString()} points` : worker ? 'Checking…' : 'Not rated';
+  $('#import-summary').textContent = `Difficulty: ${difficulty} · ${puzzle.givens.filter(Boolean).length} givens · ${puzzle.lines.length} palindromes`;
   if (analysis) { $('#rating').textContent = `${analysis.level} · ${analysis.score.toLocaleString()} points`; $('#hardest').textContent = `Hardest technique: ${analysis.hardest}. ${analysis.guesses} trials, ${analysis.backtracks} rollbacks.`; }
   if (frame && analysis) {
     $('#slide-count').textContent = `Step ${slide! + 1} of ${analysis.frames.length}`; $('#slide-title').textContent = frame.title; $('#slide-description').textContent = frame.description;
@@ -153,6 +183,7 @@ function navigate() {
   const page = new URL(location.href).searchParams.get('page') ?? 'generate';
   $('#studio').hidden = page === 'techniques' || page === 'simulation'; $('#simulation').hidden = page !== 'simulation'; $('#techniques').hidden = page !== 'techniques'; $('#import-panel').hidden = page !== 'import-grid'; $('#generation').hidden = page === 'import-grid';
   $('#page-menu summary').textContent = page === 'simulation' ? 'Simulation' : page === 'techniques' ? 'Techniques' : page === 'import-grid' ? 'Import grid' : 'Generate';
+  render();
 }
 document.querySelectorAll<HTMLAnchorElement>('.page-nav a').forEach(link => link.onclick = event => { event.preventDefault(); window.history.pushState({}, '', link.href); $<HTMLDetailsElement>('#page-menu').open = false; navigate(); });
 mountSimulation($('#simulation'), result => {

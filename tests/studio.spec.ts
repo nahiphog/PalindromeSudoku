@@ -75,6 +75,10 @@ test('highlights Swordfish evidence and eliminations in the reported puzzle', as
   await page.getByLabel('Puzzle to import').fill('PS1|000000980073004000000020000520040009000809000900060047000050000000600490067000000|5343322131;5767788979;5262728171;5848382939');
   await page.getByRole('button', { name: 'Load and check puzzle' }).click();
   await expect(page.locator('#status-text')).toContainText('Exactly one solution.');
+  await expect(page.locator('#report')).toBeHidden();
+  await expect(page.locator('#import-summary')).toContainText('22 givens · 4 palindromes');
+  await expect(page.locator('#import-summary')).toContainText('points');
+  expect(await page.locator('#load').evaluate(button => button.nextElementSibling?.id)).toBe('import-summary');
   await page.getByRole('button', { name: 'Go to step 18: Swordfish', exact: true }).click();
   await expect(page.locator('#slide-title')).toHaveText('Swordfish');
   await expect(page.locator('#cells .step-band-primary')).toHaveCount(27);
@@ -83,8 +87,23 @@ test('highlights Swordfish evidence and eliminations in the reported puzzle', as
   expect(await page.locator('#cells .candidate-primary').count()).toBeGreaterThanOrEqual(6);
   expect(await page.locator('#cells .step-elimination .removed-candidate').count()).toBeGreaterThan(0);
   await page.locator('.board-panel').screenshot({ path: 'test-results/swordfish-highlights.png' });
+  const digits = await page.locator('#cells .digit').allTextContents();
+  const allCount = await page.locator('#cells .pencil > span').evaluateAll(marks => marks.filter(mark => mark.textContent).length);
+  await page.getByLabel('Notation', { exact: true }).selectOption('snyder');
+  const snyderCount = await page.locator('#cells .pencil > span').evaluateAll(marks => marks.filter(mark => mark.textContent).length);
+  expect(snyderCount).toBeGreaterThan(0); expect(snyderCount).toBeLessThan(allCount);
+  await page.getByLabel('Notation', { exact: true }).selectOption('hidden');
+  await expect(page.locator('#cells .pencil')).toHaveCount(0);
+  expect(await page.locator('#cells .digit').allTextContents()).toEqual(digits);
+  await expect(page.locator('#slide-title')).toHaveText('Swordfish');
+  await page.getByLabel('Notation', { exact: true }).selectOption('all');
+  expect(await page.locator('#cells .pencil > span').evaluateAll(marks => marks.filter(mark => mark.textContent).length)).toBe(allCount);
   await page.getByRole('button', { name: 'Return to puzzle' }).click();
   await expect(page.locator('#cells [class*="step-"]')).toHaveCount(0);
+  await page.getByLabel('Notation', { exact: true }).selectOption('snyder');
+  await page.reload();
+  await expect(page.getByLabel('Notation', { exact: true })).toHaveValue('snyder');
+  expect(await page.locator('#cells .pencil > span').evaluateAll(marks => marks.filter(mark => mark.textContent).length)).toBeGreaterThan(0);
 });
 
 test('keeps page URLs free of fragments', async ({ page }) => {
