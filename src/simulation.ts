@@ -50,6 +50,7 @@ export function mountSimulation(root: HTMLElement, open: (result: Generated) => 
       const lines = puzzle.lines.map(line => `<polyline points="${line.map(c => `${c % 9 * 100 + 50},${Math.floor(c / 9) * 100 + 50}`).join(' ')}"/>`).join('');
       card.innerHTML = `<h3>Trial ${trial}</h3><div class="board" style="max-width:260px"><svg class="line-overlay" viewBox="0 0 900 900" aria-hidden="true">${lines}</svg><div class="cells">${puzzle.givens.map((digit, cell) => `<div class="cell given ${[2, 5].includes(cell % 9) ? 'box-right' : ''} ${[2, 5].includes(Math.floor(cell / 9)) ? 'box-bottom' : ''}">${digit || ''}</div>`).join('')}</div></div>
       <p>${analysis.level} · ${analysis.score} points · ${puzzle.givens.filter(Boolean).length} givens · ${(elapsed / 1000).toFixed(2)} s</p>
+      <p>Palindrome lengths: ${puzzle.lines.map(line => line.length).join(', ')}</p>
       <p>Hardest technique: ${analysis.hardest}</p><button class="primary">View walkthrough</button> <button class="outline">Copy puzzle string</button>`;
       const [walk, copy] = card.querySelectorAll('button');
       walk.onclick = () => open(result);

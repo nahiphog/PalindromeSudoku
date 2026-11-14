@@ -168,6 +168,26 @@ test('remembers independent Generate and Simulation options after refresh', asyn
   for (const checkbox of await generate.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
 });
 
+test('blank lengths generate random puzzles and vary across simulation trials', async ({ page }) => {
+  await page.goto('/?page=generate');
+  await page.locator('#line-lengths').fill('   ');
+  await page.getByRole('button', { name: 'Generate puzzle', exact: true }).click();
+  await expect(page.locator('#status-text')).toContainText('Unique puzzle generated', { timeout: 60000 });
+  expect(await page.locator('#lines polyline').count()).toBeGreaterThan(0);
+  await page.goto('/?page=simulation');
+  await page.locator('#sim-line-lengths').fill('');
+  await page.reload();
+  await expect(page.locator('#sim-line-lengths')).toHaveValue('');
+  await page.getByLabel('Total trials').selectOption('10');
+  await page.getByLabel('Minimum difficulty').selectOption('0');
+  await page.getByRole('button', { name: 'Start simulation' }).click();
+  await expect(page.locator('#sim-status')).toHaveText('Simulation complete.', { timeout: 60000 });
+  await expect(page.locator('#sim-results > article')).toHaveCount(10);
+  const lengths = await page.locator('#sim-results p').filter({ hasText: 'Palindrome lengths:' }).allTextContents();
+  expect(new Set(lengths).size).toBeGreaterThan(1);
+  await expect(page.locator('#sim-line-lengths')).toHaveValue('');
+});
+
 test('runs a simulation trial and opens its walkthrough', async ({ page }) => {
   await page.goto('/?page=simulation');
   const simulation = page.locator('#simulation');

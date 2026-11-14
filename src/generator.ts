@@ -2,6 +2,7 @@ import { adjacent, blank, linesOverlap, type Puzzle } from './puzzle';
 import { solve } from './solver';
 import { checkLogical } from './logical-runner';
 import { analyze, type Analysis } from './walkthrough';
+/** An empty lengths array requests a fresh random layout on each generation call. */
 export interface GenerationOptions { lengths: number[]; emptyLines?: boolean; symmetricLines?: boolean; symmetric: boolean; logicalOnly: boolean }
 export interface Generated { puzzle: Puzzle; solution: number[]; analysis: Analysis; elapsed: number; attempts: number }
 const shuffle = <T>(items: T[], random: () => number): T[] => {
@@ -61,11 +62,25 @@ export function findLines(values: number[], lengths: number[], symmetric: boolea
   }
   return lines;
 }
+export function randomLineLengths(symmetric: boolean, random = Math.random): number[] {
+  const copies = symmetric ? 2 : 1;
+  const groups = 1 + Math.floor(random() * (12 / copies));
+  const lengths: number[] = [];
+  let remaining = 65;
+  for (let group = 0; group < groups; group++) {
+    const reserve = (groups - group - 1) * copies * 2;
+    const maximum = Math.min(15, Math.floor((remaining - reserve) / copies));
+    const length = 2 + Math.floor(random() * (maximum - 1));
+    for (let copy = 0; copy < copies; copy++) lengths.push(length);
+    remaining -= length * copies;
+  }
+  return lengths;
+}
 /** Construction uses a known valid completion; each removal is independently checked.
  * Logical-only generation retries layouts whose final clue set needs search. */
 export function generate(options: GenerationOptions, progress: (text: string) => void = () => {}, random = Math.random, budgetMs = 60000): Generated {
   const { lengths, symmetricLines = true } = options;
-  if (!lengths.length || lengths.length > 12 || lengths.some(n => !Number.isInteger(n) || n < 2 || n > 15) ||
+  if (lengths.length > 12 || lengths.some(n => !Number.isInteger(n) || n < 2 || n > 15) ||
     lengths.reduce((sum, n) => sum + n, 0) > 65) {
     throw new Error('Enter 1–12 comma-separated whole-number lengths from 2 to 15, totaling at most 65 cells.');
   }
@@ -76,8 +91,10 @@ export function generate(options: GenerationOptions, progress: (text: string) =>
   const start = performance.now(), deadline = start + budgetMs;
   let attempts = 0;
   layouts: while (performance.now() < deadline) {
-    attempts++; progress(`Finding a palindrome layout · attempt ${attempts}`);
-    const solution = completedGrid(random), lines = findLines(solution, lengths, symmetricLines, random);
+    // Retry random lengths as well as the layout so an infeasible combination cannot stall a trial.
+    const trialLengths = lengths.length ? lengths : randomLineLengths(symmetricLines, random);
+    attempts++; progress(`Finding a palindrome layout · attempt ${attempts} · lengths ${trialLengths.join(',')}`);
+    const solution = completedGrid(random), lines = findLines(solution, trialLengths, symmetricLines, random);
     if (!lines || linesOverlap(lines)) continue;
     const puzzle: Puzzle = { ...blank(), lines, values: [...solution], givens: [...solution] };
     const orbits = shuffle(Array.from({ length: options.symmetric ? 41 : 81 }, (_, c) => c), random);
