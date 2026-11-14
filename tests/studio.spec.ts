@@ -188,6 +188,51 @@ test('blank lengths generate random puzzles and vary across simulation trials', 
   await expect(page.locator('#sim-line-lengths')).toHaveValue('');
 });
 
+test('copies simulation grids as puzzle strings and PNG images', async ({ page }) => {
+  await page.goto('/?page=simulation');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: async (text: string) => { (window as any).copiedText = text; },
+      write: async (items: ClipboardItem[]) => { (window as any).copiedImage = await items[0].getType('image/png'); },
+    } });
+  });
+  await page.locator('#sim-line-lengths').fill('3,3');
+  await page.getByLabel('Total trials').selectOption('1');
+  await page.getByLabel('Minimum difficulty').selectOption('0');
+  await page.getByRole('button', { name: 'Start simulation' }).click();
+  await expect(page.locator('#sim-status')).toHaveText('Simulation complete.', { timeout: 60000 });
+  const card = page.locator('#sim-results > article').first();
+  const givens = (await card.locator('.cell').allTextContents()).map(text => text || '0').join('');
+  await card.getByRole('button', { name: 'Copy puzzle string', exact: true }).click();
+  await expect(card.locator('.copy-status')).toHaveText('Puzzle string copied.');
+  expect(await page.evaluate(() => (window as any).copiedText)).toMatch(new RegExp(`^PS1\\|${givens}\\|[1-9;]+$`));
+  await card.getByRole('button', { name: 'Copy grid image', exact: true }).click();
+  await expect(card.locator('.copy-status')).toHaveText('Grid image copied.');
+  const image = await page.evaluate(async () => {
+    const blob: Blob = (window as any).copiedImage;
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 904;
+    const ctx = canvas.getContext('2d')!; ctx.drawImage(bitmap, 0, 0);
+    const pixel = (x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+    return { type: blob.type, width: bitmap.width, height: bitmap.height, boundary: pixel(302, 50), background: pixel(10, 10) };
+  });
+  expect(image).toEqual({ type: 'image/png', width: 904, height: 904, boundary: [69,69,75,255], background: [255,255,255,255] });
+  await page.evaluate(() => {
+    navigator.clipboard.write = async () => { throw new Error('Clipboard denied'); };
+    navigator.clipboard.writeText = async () => { throw new Error('Clipboard denied'); };
+  });
+  await card.getByRole('button', { name: 'Copy grid image', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Save grid image', exact: true })).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await card.getByRole('button', { name: 'Save grid image', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('palindrome-trial-1.png');
+  await download.saveAs('test-results/simulation-grid.png');
+  await card.getByRole('button', { name: 'Copy puzzle string', exact: true }).click();
+  await expect(page.locator('#sim-copy')).toBeVisible();
+  expect(await page.locator('#sim-copy').inputValue()).toContain(`PS1|${givens}|`);
+});
+
 test('runs a simulation trial and opens its walkthrough', async ({ page }) => {
   await page.goto('/?page=simulation');
   const simulation = page.locator('#simulation');

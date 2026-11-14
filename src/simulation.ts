@@ -2,6 +2,7 @@ import type { Generated } from './generator';
 import { generationOptionsMarkup, readGenerationOptions } from './generation-options';
 import { encodePuzzle } from './puzzle';
 import { rememberOptions } from './saved-options';
+import { gridImageBlob } from './grid-image';
 
 const TRIAL_COUNTS = [1, 10, 100, 1000, 10000, 100000, 1000000];
 const DEFAULT_TRIAL_COUNT = 1000000;
@@ -51,13 +52,33 @@ export function mountSimulation(root: HTMLElement, open: (result: Generated) => 
       card.innerHTML = `<h3>Trial ${trial}</h3><div class="board" style="max-width:260px"><svg class="line-overlay" viewBox="0 0 900 900" aria-hidden="true">${lines}</svg><div class="cells">${puzzle.givens.map((digit, cell) => `<div class="cell given ${[2, 5].includes(cell % 9) ? 'box-right' : ''} ${[2, 5].includes(Math.floor(cell / 9)) ? 'box-bottom' : ''}">${digit || ''}</div>`).join('')}</div></div>
       <p>${analysis.level} · ${analysis.score} points · ${puzzle.givens.filter(Boolean).length} givens · ${(elapsed / 1000).toFixed(2)} s</p>
       <p>Palindrome lengths: ${puzzle.lines.map(line => line.length).join(', ')}</p>
-      <p>Hardest technique: ${analysis.hardest}</p><button class="primary">View walkthrough</button> <button class="outline">Copy puzzle string</button>`;
-      const [walk, copy] = card.querySelectorAll('button');
+      <p>Hardest technique: ${analysis.hardest}</p><div class="simulation-actions"><button class="primary">View walkthrough</button><button class="outline">Copy puzzle string</button><button class="outline">Copy grid image</button><button class="outline" hidden>Save grid image</button></div><p class="copy-status" role="status"></p>`;
+      const [walk, copy, copyImage, saveImage] = card.querySelectorAll('button');
+      const feedback = card.querySelector<HTMLElement>('.copy-status')!;
       walk.onclick = () => open(result);
       copy.onclick = async () => {
         const text = encodePuzzle(puzzle);
-        try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; }
-        catch { const field = el<HTMLTextAreaElement>('copy'); field.hidden = false; field.value = text; field.select(); }
+        try { await navigator.clipboard.writeText(text); feedback.textContent = 'Puzzle string copied.'; }
+        catch { const field = el<HTMLTextAreaElement>('copy'); field.hidden = false; field.value = text; field.focus(); field.select(); feedback.textContent = 'Select and copy the puzzle string in the text box below.'; }
+      };
+      copyImage.onclick = async () => {
+        copyImage.disabled = true;
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': gridImageBlob(puzzle) })]);
+          feedback.textContent = 'Grid image copied.';
+        } catch {
+          feedback.textContent = 'Image copying is unavailable. Use Save grid image instead.';
+          saveImage.hidden = false;
+        } finally { copyImage.disabled = false; }
+      };
+      saveImage.onclick = async () => {
+        try {
+          const url = URL.createObjectURL(await gridImageBlob(puzzle));
+          const link = document.createElement('a');
+          link.href = url; link.download = `palindrome-trial-${trial}.png`; link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          feedback.textContent = 'Grid image saved.';
+        } catch { feedback.textContent = 'Could not create the grid image. Please try again.'; }
       };
       el('results').append(card);
     }

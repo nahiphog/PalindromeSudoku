@@ -1,4 +1,5 @@
 import { mountSimulation } from './simulation';
+import { gridImageCanvas } from './grid-image';
 import { walkthroughHighlights } from './walkthrough-highlights';
 import { snyderNotes } from './notation';
 import { rememberOptions } from './saved-options';
@@ -169,14 +170,8 @@ $('#copy').onclick = async () => {
 function download(blob: Blob, filename: string) { const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 $('#export').onclick = () => download(new Blob([JSON.stringify(puzzle, null, 2)], { type: 'application/json' }), 'palindrome-sudoku.json');
 $('#image').onclick = () => {
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 904; const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 904, 904); ctx.translate(2, 2);
-  ctx.lineWidth = 26; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#ccccd0';
-  for (const line of puzzle.lines) { ctx.beginPath(); line.forEach((c, i) => { const x = c % 9 * 100 + 50, y = Math.floor(c / 9) * 100 + 50; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); }
-  ctx.lineCap = 'butt'; for (let i = 0; i <= 9; i++) { ctx.strokeStyle = i % 3 ? '#ddd' : '#45454b'; ctx.lineWidth = i % 3 ? 1 : 4; ctx.beginPath(); ctx.moveTo(i * 100, 0); ctx.lineTo(i * 100, 900); ctx.moveTo(0, i * 100); ctx.lineTo(900, i * 100); ctx.stroke(); }
   const values = slide !== null && analysis ? analysis.frames[slide].values : revealed ? solutions[0] : puzzle.values;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '48px Arial'; ctx.fillStyle = '#292c33'; values.forEach((v, c) => { if (v) ctx.fillText(String(v), c % 9 * 100 + 50, Math.floor(c / 9) * 100 + 52); });
-  canvas.toBlob(blob => { if (blob) download(blob, 'palindrome-sudoku.png'); });
+  gridImageCanvas(puzzle, values).toBlob(blob => { if (blob) download(blob, 'palindrome-sudoku.png'); });
 };
 function navigate() {
   if (location.href.includes('#')) window.history.replaceState(window.history.state, '', location.pathname + location.search);
